@@ -25,6 +25,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install boto3 pyyaml PyGithub google-cloud-functions google-auth
+          pip install git+https://github.com/dekkov/FaaSr-Backend.git
 
       - name: Install OpenWhisk CLI
         run: |
