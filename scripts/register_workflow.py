@@ -18,6 +18,10 @@ import re
 from google.cloud import functions_v1
 from google.auth import default
 
+# Import FaaSr-Backend functions
+from FaaSr_py.helpers.graph_functions import check_dag, validate_json, extract_rank
+from FaaSr_py.engine.faasr_payload import FaaSrPayload
+
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -31,184 +35,145 @@ def parse_arguments():
 def read_workflow_file(file_path):
     try:
         with open(file_path, 'r') as f:
-            return json.load(f)
+            workflow_data = json.load(f)
+        
+        # Validate JSON schema using FaaSr-Backend validation
+        print("Validating workflow JSON schema...")
+        if validate_json(workflow_data):
+            print("✓ Workflow JSON schema validation passed")
+        
+        return workflow_data
     except FileNotFoundError:
         print(f"Error: Workflow file {file_path} not found")
         sys.exit(1)
     except json.JSONDecodeError:
         print(f"Error: Invalid JSON in workflow file {file_path}")
         sys.exit(1)
+    except Exception as e:
+        print(f"Error: Workflow validation failed: {str(e)}")
+        sys.exit(1)
 
-def extract_rank(str_input):
+# Graph validation functions are now imported from FaaSr-Backend
+# No need to implement them here
+
+def validate_workflow_with_faasr_backend(workflow_data):
     """
-    Returns action name and rank of an action with rank (e.g func(7) returns (func, 7))
-
-    Arguments:
-        str_input: function name with rank
-    Returns:
-        (str, int) -- action name and rank
+    Validate workflow using FaaSr-Backend validation functions
+    This includes JSON schema validation, DAG validation, and S3 checks
     """
-    parts = str_input.split("(")
-    if len(parts) != 2 or not parts[1].endswith(")"):
-        return str_input, 1
-    rank = int(parts[1][:-1])
-    action_name = parts[0]
-    return (action_name, rank)
-
-def is_cyclic(adj_graph, curr, visited, stack):
-    """
-    Recursive function that if there is a cycle in a directed
-    graph defined by an adjacency list
-
-    Arguments:
-        adj_graph: adjacency list for graph (dict)
-        curr: current node
-        visited: set of visited nodes (set)
-        stack: list of nodes in recursion call stack (list)
-
-    Returns:
-        bool: True if cycle exists, False otherwise
-    """
-    # if the current node is in the recursion call
-    # stack then there must be a cycle in the graph
-    if curr in stack:
+    try:
+        # Create a temporary FaaSrPayload-like object for validation
+        # We'll use a mock approach since we don't have a GitHub URL
+        class MockFaaSrPayload:
+            def __init__(self, workflow_data):
+                self._base_workflow = workflow_data
+                self._overwritten = {}
+            
+            def __getitem__(self, key):
+                if key in self._overwritten:
+                    return self._overwritten[key]
+                elif key in self._base_workflow:
+                    return self._base_workflow[key]
+                raise KeyError(key)
+            
+            def __setitem__(self, key, value):
+                self._overwritten[key] = value
+            
+            def get(self, key, default=None):
+                if key in self._overwritten:
+                    return self._overwritten[key]
+                elif key in self._base_workflow:
+                    return self._base_workflow[key]
+                return default
+        
+        # Create mock payload for validation
+        mock_payload = MockFaaSrPayload(workflow_data)
+        
+        # Validate DAG structure using FaaSr-Backend
+        print("Validating workflow DAG structure...")
+        check_dag(workflow_data)
+        print("✓ Workflow DAG validation passed")
+        
+        # Validate S3 data stores using FaaSr-Backend
+        print("Validating S3 data stores...")
+        mock_payload.s3_check = lambda: validate_s3_datastores(workflow_data)
+        mock_payload.s3_check()
+        print("✓ S3 data stores validation passed")
+        
         return True
+        
+    except Exception as e:
+        print(f"Error: FaaSr-Backend validation failed: {str(e)}")
+        sys.exit(1)
 
-    # add current node to recursion call stack and visited set
-    visited.add(curr)
-    stack.append(curr)
-
-    # check each successor for cycles, recursively calling is_cyclic()
-    for child in adj_graph[curr]:
-        if child not in visited and is_cyclic(adj_graph, child, visited, stack):
-            logger.error(f"Function loop found from node {curr} to {child}")
-            sys.exit(1)
-        elif child in stack:
-            logger.error(f"Function loop found from node {curr} to {child}")
-            sys.exit(1)
-
-    # no more successors to visit for this branch and no cycles found
-    # remove current node from recursion call stack
-    stack.pop()
-    return False
-
-def build_adjacency_graph(payload):
+def validate_s3_datastores(workflow_data):
     """
-    This function builds an adjacency list for the FaaSr workflow graph and determines
-    the ranks of each action
-
-    Arguments:
-        payload: FaaSr payload dict
-    Returns:
-        adj_graph: dict of predecessor: successor pairs
-        rank: dict of each action's rank
+    Validate S3 data stores using the same logic as FaaSr-Backend
     """
-    adj_graph = defaultdict(list)
-    ranks = dict()
+    import boto3
+    
+    if 'DataStores' not in workflow_data:
+        return True
+        
+    # Iterate through all of the data stores
+    for server in workflow_data['DataStores'].keys():
+        server_config = workflow_data['DataStores'][server]
+        
+        # Get the endpoint and region
+        server_endpoint = server_config.get("Endpoint")
+        server_region = server_config.get('Region', 'us-east-1')
+        
+        # Ensure that endpoint is a valid http address
+        if server_endpoint and not server_endpoint.startswith("http"):
+            error_message = f"Invalid data store server endpoint {server}"
+            logger.error(error_message)
+            sys.exit(1)
 
-    # Build adjacency list from ActionList
-    for func in payload["ActionList"].keys():
-        invoke_next = payload["ActionList"][func]["InvokeNext"]
-        if isinstance(invoke_next, str):
-            invoke_next = [invoke_next]
-        for child in invoke_next:
+        # If the region is empty, then use default 'us-east-1'
+        if not server_region:
+            server_region = "us-east-1"
 
-            def process_action(action):
-                action_name, action_rank = extract_rank(action)
-                if action_name in ranks and ranks[action_name] > 1:
-                    err_msg = "Function with rank cannot have multiple predecessors"
-                    logger.error(err_msg)
-                    sys.exit(1)
-                else:
-                    adj_graph[func].append(action_name)
-                    ranks[action_name] = action_rank
+        # Skip S3 validation if credentials are placeholders
+        access_key = server_config.get('AccessKey', '')
+        secret_key = server_config.get('SecretKey', '')
+        
+        if (access_key.endswith('_ACCESS_KEY') or 
+            secret_key.endswith('_SECRET_KEY') or
+            not access_key or not secret_key):
+            print(f"Skipping S3 validation for {server} (placeholder credentials)")
+            continue
 
-            if isinstance(child, dict):
-                for conditional_branch in child.values():
-                    for action in conditional_branch:
-                        process_action(action)
+        try:
+            if server_endpoint:
+                s3_client = boto3.client(
+                    "s3",
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    region_name=server_region,
+                    endpoint_url=server_endpoint,
+                )
             else:
-                process_action(child)
-
-    for func in adj_graph:
-        if func not in ranks:
-            ranks[func] = 0
-
-    return (adj_graph, ranks)
-
-def predecessors_list(adj_graph):
-    """This function returns a map of action predecessor pairs
-
-    Arguments:
-        adj_graph: adjacency list for graph -- dict(function: successor)
-    """
-    pre = defaultdict(list)
-    for func1 in adj_graph:
-        for func2 in adj_graph[func1]:
-            pre[func2].append(func1)
-    return pre
-
-def check_dag(faasr_payload):
-    """
-    This method checks for cycles, repeated function names,
-    or unreachable nodes in the workflow and aborts if it finds any
-
-    Arguments:
-        payload: FaaSr payload dict
-    Returns:
-        predecessors: dict -- map of function predecessors
-    """
-    if faasr_payload["FunctionInvoke"] not in faasr_payload["ActionList"]:
-        err_msg = "FunctionInvoke does not refer to a valid function"
-        logger.error(err_msg)
-        sys.exit(1)
-
-    adj_graph, ranks = build_adjacency_graph(faasr_payload)
-
-    # Initialize empty recursion call stack
-    stack = []
-
-    # Initialize empty visited set
-    visited = set()
-
-    # Find initial function in the graph
-    start = False
-    for func in faasr_payload["ActionList"]:
-        if ranks[func] == 0:
-            start = True
-            # This function stores the first function with no predecessors
-            # In the cases where there is multiple functions with no
-            # predecessors, an unreachable state error will occur later
-            first_func = func
-            break
-
-    # Ensure there is an initial action
-    if start is False:
-        logger.error("Function loop found: no initial action")
-        sys.exit(1)
-
-    # Check for cycles
-    is_cyclic(adj_graph, first_func, visited, stack)
-
-    # Check if all of the functions have been visited by the DFS
-    # If not, then there is an unreachable state in the graph
-    for func in faasr_payload["ActionList"]:
-        if func.split(".")[0] not in visited:
-            logger.error(f"Unreachable state found: {func}")
-            sys.exit(1)
-
-    # Initialize predecessor list
-    pre = predecessors_list(adj_graph)
-
-    curr_pre = pre[faasr_payload["FunctionInvoke"]]
-    real_pre = []
-    for p in curr_pre:
-        if p in ranks and ranks[p] > 1:
-            for i in range(1, ranks[p] + 1):
-                real_pre.append(f"{p}.{i}")
-        else:
-            real_pre.append(p)
-    return real_pre
+                s3_client = boto3.client(
+                    "s3",
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    region_name=server_region,
+                )
+            
+            # Use boto3 head bucket to ensure that the
+            # bucket exists and that we have access to it
+            bucket_name = server_config.get('Bucket')
+            if bucket_name:
+                s3_client.head_bucket(Bucket=bucket_name)
+                print(f"✓ S3 datastore '{server}' is accessible")
+                
+        except Exception as e:
+            err_message = f"S3 server {server} failed with message: {e}"
+            logger.error(err_message)
+            # Don't exit here during registration - just warn
+            print(f"Warning: {err_message}")
+    
+    return True
 
 def get_github_token():
     # Get GitHub PAT from environment variable
@@ -230,14 +195,37 @@ def get_aws_credentials():
     
     return aws_access_key, aws_secret_key, role_arn
 
-def get_gcp_credentials():
-    # Get GCP credentials from environment variables
-    project_id = os.getenv('GCP_PROJECT_ID')
-    service_account_key = os.getenv('GCP_SECRETKEY')
+def get_gcp_credentials_from_workflow(workflow_data):
+    """Get GCP credentials from workflow data and environment variables"""
+    # Find the GCP server configuration
+    gcp_server_config = None
+    for server_name, server_config in workflow_data['ComputeServers'].items():
+        faas_type = server_config.get('FaaSType', '').lower()
+        if faas_type in ['cloudfunctions', 'cloud_functions', 'gcp', 'gcf', 'googlecloud']:
+            gcp_server_config = server_config
+            break
     
-    if not project_id:
-        print("Error: GCP_PROJECT_ID environment variable not set")
+    if not gcp_server_config:
+        print("Error: No GCP server configuration found in workflow data")
         sys.exit(1)
+    
+    # Get project ID from Namespace field
+    project_id = gcp_server_config.get('Namespace')
+    if not project_id:
+        print("Error: Namespace (project ID) not found in GCP server configuration")
+        sys.exit(1)
+    
+    # Get service account key from SecretKey field and resolve placeholder
+    secret_key_placeholder = gcp_server_config.get('SecretKey')
+    if not secret_key_placeholder:
+        print("Error: SecretKey not found in GCP server configuration")
+        sys.exit(1)
+    
+    # If it's a placeholder, get from environment variable
+    if secret_key_placeholder == "GCP_SECRET_KEY":
+        service_account_key = os.getenv('GCP_SECRETKEY')
+    else:
+        service_account_key = secret_key_placeholder
     
     if service_account_key:
         # If service account key is provided, set it up
@@ -249,13 +237,13 @@ def get_gcp_credentials():
             
             # Set the environment variable for Google Cloud authentication
             os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = key_file
-            print("Using GCP service account key authentication")
+            print(f"Using GCP service account key authentication for project: {project_id}")
             return project_id, key_file
         except Exception as e:
             print(f"Error setting up GCP service account key: {str(e)}")
             sys.exit(1)
     else:
-        print("Using default GCP authentication (e.g., gcloud auth)")
+        print(f"Using default GCP authentication for project: {project_id}")
         return project_id, None
 
 def set_github_variable(repo_full_name, var_name, var_value, github_token):
@@ -341,15 +329,11 @@ def create_secret_payload(workflow_data):
                     if credentials['My_OW_Account_API_KEY']:
                         server_config['API.key'] = credentials['My_OW_Account_API_KEY']
             elif faas_type in ['CloudFunctions', 'GoogleCloud']:
-                # Replace GCP credentials placeholders
-                if 'ProjectID' in server_config and server_config['ProjectID'] == f"{server_key}_PROJECT_ID":
+
+                if 'Namespace' in server_config and server_config['Namespace'] == f"{server_key}_PROJECT_ID":
                     if credentials['My_GCP_Account_PROJECT_ID']:
-                        server_config['ProjectID'] = credentials['My_GCP_Account_PROJECT_ID']
-                if 'ServiceAccountKey' in server_config and server_config['ServiceAccountKey'] == f"{server_key}_SERVICE_ACCOUNT_KEY":
-                    if credentials['My_GCP_Account_SERVICE_ACCOUNT_KEY']:
-                        server_config['ServiceAccountKey'] = credentials['My_GCP_Account_SERVICE_ACCOUNT_KEY']
-                # Handle SecretKey field as well (as seen in gcp.json)
-                if 'SecretKey' in server_config and server_config['SecretKey'] == f"{server_key}_SECRET_KEY":
+                        server_config['Namespace'] = credentials['My_GCP_Account_PROJECT_ID']
+                if 'SecretKey' in server_config and server_config['SecretKey'] in [f"{server_key}_SECRET_KEY", "GCP_SECRET_KEY"]:
                     if credentials['My_GCP_Account_SERVICE_ACCOUNT_KEY']:
                         server_config['SecretKey'] = credentials['My_GCP_Account_SERVICE_ACCOUNT_KEY']
 
@@ -763,8 +747,8 @@ def deploy_to_ow(workflow_data):
 
 def deploy_to_gcp(workflow_data):
     """Deploy functions to Google Cloud Functions using container images."""
-    # Get GCP credentials
-    project_id, key_file = get_gcp_credentials()
+    # Get GCP credentials from workflow data
+    project_id, key_file = get_gcp_credentials_from_workflow(workflow_data)
     
     try:
         # Initialize GCP client
@@ -894,11 +878,11 @@ def main():
     # Store the workflow file path in the workflow data
     workflow_data['_workflow_file'] = args.workflow_file
     
-    # Validate workflow for cycles and unreachable states
-    print("Validating workflow for cycles and unreachable states...")
+    # Validate workflow using FaaSr-Backend validation functions
+    print("Validating workflow using FaaSr-Backend validation...")
     try:
-        check_dag(workflow_data)
-        print("✓ Workflow validation passed - no cycles or unreachable states found")
+        validate_workflow_with_faasr_backend(workflow_data)
+        print("✓ Complete workflow validation passed")
     except SystemExit:
         print("✗ Workflow validation failed - check logs for details")
         sys.exit(1)

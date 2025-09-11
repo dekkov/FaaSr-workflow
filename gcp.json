@@ -14,18 +14,19 @@
             "Region": "us-central1",
             "Endpoint": "https://run.googleapis.com/v2/projects/",
             "UseSecretStore": true,
-            "ClientEmail": "faasr-workflow-runner@faasr-dev.iam.gserviceaccount.com",
-            "SecretKey": "My_GCP_Server_SECRET_KEY",
+            "ClientEmail": "faasr-hoang@faasr-471105.iam.gserviceaccount.com",
+            "SecretKey": "GCP_SECRET_KEY",
             "TokenUri": "https://oauth2.googleapis.com/token"
         }
     },
     "DataStores": {
-        "My_S3_Bucket": {
-            "Bucket": "faasr-test-0001",
-            "Region": "us-east-1",
-            "Writable": "TRUE",
-            "AccessKey": "My_S3_Bucket_ACCESS_KEY",
-            "SecretKey": "My_S3_Bucket_SECRET_KEY"
+        "My_Minio_Bucket": {
+          "Bucket": "hoang",
+          "Endpoint": "https://play.min.io",
+          "Region": "us-east-1",
+          "Writable": "TRUE",
+          "AccessKey": "My_Minio_Bucket_ACCESS_KEY",
+          "SecretKey": "My_Minio_Bucket_SECRET_KEY"
         }
     },
     "ActionList": {
@@ -103,9 +104,9 @@
     },
     "FunctionInvoke": "add-operation",
     "FaaSrLog": "FaaSrLog",
-    "LoggingDataStore": "My_S3_Bucket",
-    "DefaultDataStore": "My_S3_Bucket",
+    "LoggingDataStore": "My_Minio_Bucket",
+    "DefaultDataStore": "My_Minio_Bucket",
     "InvocationID":"1234",
     "InvocationIDFromDate": "%Y%m%d%H%M",
-    "WorkflowName": "test-ts-workflow-7"
+    "WorkflowName": "gcp"
 }
