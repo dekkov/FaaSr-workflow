@@ -7,8 +7,8 @@ import os
 import sys
 
 import boto3
+import requests
 from botocore.exceptions import ClientError
-from google.cloud import secretmanager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -213,69 +213,88 @@ def get_gcp_config(workflow_data, secrets):
     return gcp_secret_key, project_id, client_email
 
 
-def sync_secret_to_gcp(client, project_id, secret_name, secret_value):
+def sync_secret_to_gcp(headers, project_id, secret_name, secret_value):
     """
-    Sync a single secret to GCP Secret Manager.
+    Sync a single secret to GCP Secret Manager using REST API.
     Creates the secret if it doesn't exist, adds a new version if it does.
     """
-    parent = f"projects/{project_id}"
-    secret_path = f"{parent}/secrets/{secret_name}"
+    import base64
     
+    # Base URL for Secret Manager API
+    base_url = f"https://secretmanager.googleapis.com/v1/projects/{project_id}/secrets"
+    secret_url = f"{base_url}/{secret_name}"
+    
+    # Check if secret exists
     try:
-        # Try to get the secret to see if it exists
-        client.get_secret(request={"name": secret_path})
+        response = requests.get(secret_url, headers=headers)
         
-        # Secret exists, add a new version
-        try:
-            parent_version = secret_path
-            payload = secret_value.encode("UTF-8")
+        if response.status_code == 200:
+            # Secret exists, add a new version
+            version_url = f"{secret_url}:addVersion"
             
-            client.add_secret_version(
-                request={
-                    "parent": parent_version,
-                    "payload": {"data": payload}
+            # Encode the secret value in base64
+            encoded_payload = base64.b64encode(secret_value.encode("UTF-8")).decode("UTF-8")
+            
+            version_body = {
+                "payload": {
+                    "data": encoded_payload
                 }
-            )
-            logger.info(f"Updated secret: {secret_name}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to update secret {secret_name}: {e}")
+            }
+            
+            version_response = requests.post(version_url, json=version_body, headers=headers)
+            
+            if version_response.status_code in [200, 201]:
+                logger.info(f"Updated secret: {secret_name}")
+                return True
+            else:
+                logger.error(f"Failed to update secret {secret_name}: {version_response.text}")
+                return False
+                
+        elif response.status_code == 404:
+            # Secret doesn't exist, create it
+            create_body = {
+                "replication": {
+                    "automatic": {}
+                }
+            }
+            
+            create_url = f"{base_url}?secretId={secret_name}"
+            create_response = requests.post(create_url, json=create_body, headers=headers)
+            
+            if create_response.status_code in [200, 201]:
+                logger.info(f"Created secret: {secret_name}")
+                
+                # Now add the first version
+                version_url = f"{secret_url}:addVersion"
+                encoded_payload = base64.b64encode(secret_value.encode("UTF-8")).decode("UTF-8")
+                
+                version_body = {
+                    "payload": {
+                        "data": encoded_payload
+                    }
+                }
+                
+                version_response = requests.post(version_url, json=version_body, headers=headers)
+                
+                if version_response.status_code in [200, 201]:
+                    return True
+                else:
+                    logger.error(f"Failed to add version to secret {secret_name}: {version_response.text}")
+                    return False
+            else:
+                logger.error(f"Failed to create secret {secret_name}: {create_response.text}")
+                return False
+        else:
+            logger.error(f"Failed to check secret {secret_name}: {response.text}")
             return False
             
     except Exception as e:
-        if "NOT_FOUND" in str(e) or "404" in str(e):
-            # Secret doesn't exist, create it
-            try:
-                secret = client.create_secret(
-                    request={
-                        "parent": parent,
-                        "secret_id": secret_name,
-                        "secret": {
-                            "replication": {"automatic": {}}
-                        }
-                    }
-                )
-                
-                # Add the first version
-                payload = secret_value.encode("UTF-8")
-                client.add_secret_version(
-                    request={
-                        "parent": secret.name,
-                        "payload": {"data": payload}
-                    }
-                )
-                logger.info(f"Created secret: {secret_name}")
-                return True
-            except Exception as create_error:
-                logger.error(f"Failed to create secret {secret_name}: {create_error}")
-                return False
-        else:
-            logger.error(f"Failed to check secret {secret_name}: {e}")
-            return False
+        logger.error(f"Exception while syncing secret {secret_name}: {e}")
+        return False
 
 
-def sync_all_secrets_to_gcp(client, project_id, secrets):
-    """Sync all GitHub secrets to GCP Secret Manager"""
+def sync_all_secrets_to_gcp(headers, project_id, secrets):
+    """Sync all GitHub secrets to GCP Secret Manager using REST API"""
     success_count = 0
     failure_count = 0
     
@@ -285,7 +304,7 @@ def sync_all_secrets_to_gcp(client, project_id, secrets):
         # Convert secret value to string if it's not already
         secret_value_str = str(secret_value) if secret_value is not None else ""
         
-        if sync_secret_to_gcp(client, project_id, secret_name, secret_value_str):
+        if sync_secret_to_gcp(headers, project_id, secret_name, secret_value_str):
             success_count += 1
         else:
             failure_count += 1
@@ -367,8 +386,12 @@ def main():
         if gcp_secret_key:
             try:
                 logger.info("Importing FaaSr_py helper...")
-                from FaaSr_py.helpers.gcp_auth import refresh_gcp_access_token
-                logger.info("Successfully imported FaaSr_py helper")
+                try:
+                    from FaaSr_py.helpers.gcp_auth import refresh_gcp_access_token
+                    logger.info("Successfully imported FaaSr_py helper")
+                except ImportError as import_error:
+                    logger.error(f"Failed to import FaaSr_py: {import_error}")
+                    raise
                 
                 # Find the GCP server name from workflow
                 gcp_server_name = None
@@ -398,23 +421,18 @@ def main():
                     # Get access token using FaaSr helper (handles PEM format)
                     logger.info("Calling refresh_gcp_access_token...")
                     access_token = refresh_gcp_access_token(temp_payload, gcp_server_name)
-                    logger.info("Successfully authenticated with GCP using access token")
+                    logger.info("Successfully authenticated with GCP")
                     
-                    # Create credentials from access token
-                    logger.info("Creating credentials from access token...")
-                    from google.auth.transport import requests as google_requests
-                    from google.oauth2 import credentials as oauth2_credentials
+                    # Create headers for REST API calls (same as register_workflow.py)
+                    headers = {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {access_token}",
+                    }
                     
-                    credentials = oauth2_credentials.Credentials(token=access_token)
-                    
-                    # Initialize GCP Secret Manager client with access token
-                    logger.info("Initializing GCP Secret Manager client...")
-                    gcp_client = secretmanager.SecretManagerServiceClient(credentials=credentials)
-                    logger.info("Successfully initialized GCP Secret Manager client")
-                    
-                    # Sync all secrets to GCP
+                    # Sync all secrets to GCP using REST API
                     logger.info("Starting secret sync to GCP...")
-                    if not sync_all_secrets_to_gcp(gcp_client, project_id, secrets):
+                    if not sync_all_secrets_to_gcp(headers, project_id, secrets):
                         all_success = False
                         
             except Exception as e:
