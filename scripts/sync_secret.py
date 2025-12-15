@@ -373,6 +373,12 @@ def main():
                 # Build temp payload for FaaSr authentication
                 gcp_server_config = workflow_data["ComputeServers"][gcp_server_name].copy()
                 gcp_server_config["SecretKey"] = gcp_secret_key
+                
+                # Ensure Region is set (default to us-central1 if not specified)
+                if "Region" not in gcp_server_config:
+                    gcp_server_config["Region"] = "us-central1"
+                    logger.warning("GCP Region not specified in workflow, defaulting to us-central1")
+                
                 temp_payload = {"ComputeServers": {gcp_server_name: gcp_server_config}}
                 
                 # Get access token using FaaSr helper (handles PEM format)
@@ -394,7 +400,9 @@ def main():
                     all_success = False
                     
         except Exception as e:
+            import traceback
             logger.error(f"Failed to authenticate with GCP: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             all_success = False
     
     # Final status
