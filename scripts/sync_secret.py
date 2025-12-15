@@ -8,6 +8,8 @@ import sys
 
 import boto3
 from botocore.exceptions import ClientError
+from google.cloud import secretmanager
+from google.oauth2 import service_account
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Sync GitHub secrets to AWS Secrets Manager"
+        description="Sync GitHub secrets to AWS Secrets Manager and/or GCP Secret Manager"
     )
     parser.add_argument(
         "--workflow-file", required=True, help="Path to the workflow JSON file"
@@ -151,7 +153,7 @@ def sync_secret_to_aws(secrets_manager_client, secret_name, secret_value):
             return False
 
 
-def sync_all_secrets(secrets_manager_client, secrets):
+def sync_all_secrets_to_aws(secrets_manager_client, secrets):
     """Sync all GitHub secrets to AWS Secrets Manager"""
     success_count = 0
     failure_count = 0
@@ -167,10 +169,131 @@ def sync_all_secrets(secrets_manager_client, secrets):
         else:
             failure_count += 1
     
-    logger.info(f"\nSync complete: {success_count} succeeded, {failure_count} failed")
+    logger.info(f"\nAWS Sync complete: {success_count} succeeded, {failure_count} failed")
     
-    if failure_count > 0:
+    return failure_count == 0
+
+
+def get_gcp_config(workflow_data, secrets):
+    """Extract GCP configuration from workflow file and secrets"""
+    # Get GCP secret key (PEM format service account key)
+    gcp_secret_key = secrets.get("GCP_SECRETKEY") or secrets.get("GCP_SecretKey")
+    
+    if not gcp_secret_key:
+        logger.error("GCP_SECRETKEY not found in secrets")
         sys.exit(1)
+    
+    # Find GCP configuration in ComputeServers
+    compute_servers = workflow_data.get("ComputeServers", {})
+    gcp_config = None
+    
+    for server_config in compute_servers.values():
+        faas_type = server_config.get("FaaSType", "")
+        if faas_type.lower() == "googlecloud":
+            gcp_config = server_config
+            break
+    
+    if not gcp_config:
+        logger.error("No GoogleCloud configuration found in workflow ComputeServers")
+        sys.exit(1)
+    
+    # Extract required fields
+    project_id = gcp_config.get("Namespace")
+    client_email = gcp_config.get("ClientEmail")
+    
+    if not project_id:
+        logger.error("Namespace (project ID) not found in GCP configuration")
+        sys.exit(1)
+    
+    if not client_email:
+        logger.error("ClientEmail not found in GCP configuration")
+        sys.exit(1)
+    
+    logger.info(f"GCP configuration extracted: project={project_id}, email={client_email}")
+    
+    return gcp_secret_key, project_id, client_email
+
+
+def sync_secret_to_gcp(client, project_id, secret_name, secret_value):
+    """
+    Sync a single secret to GCP Secret Manager.
+    Creates the secret if it doesn't exist, adds a new version if it does.
+    """
+    parent = f"projects/{project_id}"
+    secret_path = f"{parent}/secrets/{secret_name}"
+    
+    try:
+        # Try to get the secret to see if it exists
+        client.get_secret(request={"name": secret_path})
+        
+        # Secret exists, add a new version
+        try:
+            parent_version = secret_path
+            payload = secret_value.encode("UTF-8")
+            
+            client.add_secret_version(
+                request={
+                    "parent": parent_version,
+                    "payload": {"data": payload}
+                }
+            )
+            logger.info(f"Updated secret: {secret_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update secret {secret_name}: {e}")
+            return False
+            
+    except Exception as e:
+        if "NOT_FOUND" in str(e) or "404" in str(e):
+            # Secret doesn't exist, create it
+            try:
+                secret = client.create_secret(
+                    request={
+                        "parent": parent,
+                        "secret_id": secret_name,
+                        "secret": {
+                            "replication": {"automatic": {}}
+                        }
+                    }
+                )
+                
+                # Add the first version
+                payload = secret_value.encode("UTF-8")
+                client.add_secret_version(
+                    request={
+                        "parent": secret.name,
+                        "payload": {"data": payload}
+                    }
+                )
+                logger.info(f"Created secret: {secret_name}")
+                return True
+            except Exception as create_error:
+                logger.error(f"Failed to create secret {secret_name}: {create_error}")
+                return False
+        else:
+            logger.error(f"Failed to check secret {secret_name}: {e}")
+            return False
+
+
+def sync_all_secrets_to_gcp(client, project_id, secrets):
+    """Sync all GitHub secrets to GCP Secret Manager"""
+    success_count = 0
+    failure_count = 0
+    
+    logger.info(f"\nStarting sync of {len(secrets)} secrets to GCP Secret Manager...")
+    
+    for secret_name, secret_value in secrets.items():
+        # Convert secret value to string if it's not already
+        secret_value_str = str(secret_value) if secret_value is not None else ""
+        
+        if sync_secret_to_gcp(client, project_id, secret_name, secret_value_str):
+            success_count += 1
+        else:
+            failure_count += 1
+    
+    logger.info(f"\nGCP Sync complete: {success_count} succeeded, {failure_count} failed")
+    
+    return failure_count == 0
 
 
 def main():
@@ -183,29 +306,92 @@ def main():
     # Read GitHub secrets
     secrets = read_github_secrets()
     
-    # Get AWS credentials from secrets
-    aws_access_key, aws_secret_key = get_aws_credentials(secrets)
+    # Get sync targets from environment variables
+    sync_to_aws = os.getenv("SYNC_TO_AWS", "false").lower() == "true"
+    sync_to_gcp = os.getenv("SYNC_TO_GCP", "false").lower() == "true"
     
-    # Get AWS region from workflow file
-    aws_region = get_aws_region(workflow_data)
-    
-    # Initialize AWS Secrets Manager client
-    try:
-        secrets_manager_client = boto3.client(
-            'secretsmanager',
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            region_name=aws_region
-        )
-        logger.info("Successfully initialized AWS Secrets Manager client")
-    except Exception as e:
-        logger.error(f"Failed to initialize AWS Secrets Manager client: {e}")
+    if not sync_to_aws and not sync_to_gcp:
+        logger.error("No sync target specified. Set SYNC_TO_AWS or SYNC_TO_GCP to true")
         sys.exit(1)
     
-    # Sync all secrets
-    sync_all_secrets(secrets_manager_client, secrets)
+    logger.info(f"Sync targets - AWS: {sync_to_aws}, GCP: {sync_to_gcp}")
     
-    logger.info("Secret sync completed successfully!")
+    all_success = True
+    
+    # Sync to AWS if enabled
+    if sync_to_aws:
+        logger.info("\n" + "="*60)
+        logger.info("SYNCING TO AWS SECRETS MANAGER")
+        logger.info("="*60)
+        
+        # Get AWS credentials from secrets
+        aws_access_key, aws_secret_key = get_aws_credentials(secrets)
+        
+        # Get AWS region from workflow file
+        aws_region = get_aws_region(workflow_data)
+        
+        # Initialize AWS Secrets Manager client
+        try:
+            secrets_manager_client = boto3.client(
+                'secretsmanager',
+                aws_access_key_id=aws_access_key,
+                aws_secret_access_key=aws_secret_key,
+                region_name=aws_region
+            )
+            logger.info("Successfully initialized AWS Secrets Manager client")
+        except Exception as e:
+            logger.error(f"Failed to initialize AWS Secrets Manager client: {e}")
+            all_success = False
+        else:
+            # Sync all secrets to AWS
+            if not sync_all_secrets_to_aws(secrets_manager_client, secrets):
+                all_success = False
+    
+    # Sync to GCP if enabled
+    if sync_to_gcp:
+        logger.info("\n" + "="*60)
+        logger.info("SYNCING TO GCP SECRET MANAGER")
+        logger.info("="*60)
+        
+        # Get GCP configuration
+        gcp_secret_key, project_id, client_email = get_gcp_config(workflow_data, secrets)
+        
+        # Parse the service account key JSON
+        try:
+            service_account_info = json.loads(gcp_secret_key)
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info
+            )
+            logger.info("Successfully parsed GCP service account credentials")
+        except json.JSONDecodeError:
+            logger.error("Failed to parse GCP_SECRETKEY as JSON. Expected service account key in JSON format")
+            all_success = False
+            credentials = None
+        except Exception as e:
+            logger.error(f"Failed to create GCP credentials: {e}")
+            all_success = False
+            credentials = None
+        
+        if credentials:
+            # Initialize GCP Secret Manager client
+            try:
+                gcp_client = secretmanager.SecretManagerServiceClient(credentials=credentials)
+                logger.info("Successfully initialized GCP Secret Manager client")
+            except Exception as e:
+                logger.error(f"Failed to initialize GCP Secret Manager client: {e}")
+                all_success = False
+            else:
+                # Sync all secrets to GCP
+                if not sync_all_secrets_to_gcp(gcp_client, project_id, secrets):
+                    all_success = False
+    
+    # Final status
+    logger.info("\n" + "="*60)
+    if all_success:
+        logger.info("✓ Secret sync completed successfully!")
+    else:
+        logger.error("✗ Secret sync completed with errors")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
