@@ -382,20 +382,20 @@ def main():
             all_success = False
             gcp_secret_key = None
         
-        # Use FaaSr_py helper to handle PEM format and get access token
+        # Use local helper to handle PEM format and get access token
         if gcp_secret_key:
             try:
-                logger.info("Importing FaaSr_py helper...")
+                logger.info("Importing local GCP helper...")
                 sys.stdout.flush()
                 sys.stderr.flush()
                 
                 try:
-                    from FaaSr_py.helpers.gcp_auth import refresh_gcp_access_token
-                    logger.info("Successfully imported FaaSr_py helper")
+                    from helpers import refresh_gcp_access_token
+                    logger.info("Successfully imported GCP helper")
                     sys.stdout.flush()
                     sys.stderr.flush()
                 except (ImportError, ModuleNotFoundError) as import_error:
-                    logger.error(f"Failed to import FaaSr_py.helpers.gcp_auth: {import_error}")
+                    logger.error(f"Failed to import helpers: {import_error}")
                     sys.stdout.flush()
                     sys.stderr.flush()
                     raise
