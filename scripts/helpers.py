@@ -17,6 +17,11 @@ def refresh_gcp_access_token(faasr_payload, server_name):
     client_email = server_config["ClientEmail"]
     private_key = server_config["SecretKey"]
     token_uri = server_config["TokenUri"]
+    
+    # Handle escaped newlines in the private key
+    # GitHub secrets often store \n as literal "\\n" string
+    if "\\n" in private_key:
+        private_key = private_key.replace("\\n", "\n")
 
     # Create JWT header and claims
     header = {"alg": "RS256", "typ": "JWT"}
