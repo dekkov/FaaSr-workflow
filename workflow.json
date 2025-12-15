@@ -15,6 +15,13 @@
             "UseSecretStore": true,
             "ClientEmail": "faasr-hoang@faasr-471105.iam.gserviceaccount.com",
             "TokenUri": "https://oauth2.googleapis.com/token"
+        },
+        "AWS": {
+            "FaaSType": "AWS",
+            "Region": "us-west-2",
+            "UseSecretStore": true,
+            "AccessKey": "AWS_ACCESS_KEY",
+            "SecretKey": "AWS_SECRET_KEY"
         }
     },
     "DataStores": {
