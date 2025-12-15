@@ -386,11 +386,25 @@ def main():
         if gcp_secret_key:
             try:
                 logger.info("Importing FaaSr_py helper...")
+                sys.stdout.flush()
+                sys.stderr.flush()
+                
                 try:
                     from FaaSr_py.helpers.gcp_auth import refresh_gcp_access_token
                     logger.info("Successfully imported FaaSr_py helper")
-                except ImportError as import_error:
-                    logger.error(f"Failed to import FaaSr_py: {import_error}")
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                except (ImportError, ModuleNotFoundError) as import_error:
+                    logger.error(f"Failed to import FaaSr_py.helpers.gcp_auth: {import_error}")
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                    raise
+                except Exception as e:
+                    logger.error(f"Unexpected error during import: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    sys.stdout.flush()
+                    sys.stderr.flush()
                     raise
                 
                 # Find the GCP server name from workflow
