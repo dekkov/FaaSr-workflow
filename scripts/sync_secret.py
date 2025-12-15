@@ -9,7 +9,6 @@ import sys
 import boto3
 from botocore.exceptions import ClientError
 from google.cloud import secretmanager
-from google.oauth2 import service_account
 
 logging.basicConfig(
     level=logging.INFO,
@@ -356,34 +355,47 @@ def main():
         # Get GCP configuration
         gcp_secret_key, project_id, client_email = get_gcp_config(workflow_data, secrets)
         
-        # Parse the service account key JSON
+        # Use FaaSr_py helper to handle PEM format and get access token
         try:
-            service_account_info = json.loads(gcp_secret_key)
-            credentials = service_account.Credentials.from_service_account_info(
-                service_account_info
-            )
-            logger.info("Successfully parsed GCP service account credentials")
-        except json.JSONDecodeError:
-            logger.error("Failed to parse GCP_SECRETKEY as JSON. Expected service account key in JSON format")
-            all_success = False
-            credentials = None
-        except Exception as e:
-            logger.error(f"Failed to create GCP credentials: {e}")
-            all_success = False
-            credentials = None
-        
-        if credentials:
-            # Initialize GCP Secret Manager client
-            try:
-                gcp_client = secretmanager.SecretManagerServiceClient(credentials=credentials)
-                logger.info("Successfully initialized GCP Secret Manager client")
-            except Exception as e:
-                logger.error(f"Failed to initialize GCP Secret Manager client: {e}")
+            from FaaSr_py.helpers.gcp_auth import refresh_gcp_access_token
+            
+            # Find the GCP server name from workflow
+            gcp_server_name = None
+            for server_name, server_config in workflow_data.get("ComputeServers", {}).items():
+                if server_config.get("FaaSType", "").lower() == "googlecloud":
+                    gcp_server_name = server_name
+                    break
+            
+            if not gcp_server_name:
+                logger.error("No GoogleCloud server found in ComputeServers")
                 all_success = False
             else:
+                # Build temp payload for FaaSr authentication
+                gcp_server_config = workflow_data["ComputeServers"][gcp_server_name].copy()
+                gcp_server_config["SecretKey"] = gcp_secret_key
+                temp_payload = {"ComputeServers": {gcp_server_name: gcp_server_config}}
+                
+                # Get access token using FaaSr helper (handles PEM format)
+                access_token = refresh_gcp_access_token(temp_payload, gcp_server_name)
+                logger.info("Successfully authenticated with GCP using access token")
+                
+                # Create credentials from access token
+                from google.auth.transport import requests as google_requests
+                from google.oauth2 import credentials as oauth2_credentials
+                
+                credentials = oauth2_credentials.Credentials(token=access_token)
+                
+                # Initialize GCP Secret Manager client with access token
+                gcp_client = secretmanager.SecretManagerServiceClient(credentials=credentials)
+                logger.info("Successfully initialized GCP Secret Manager client")
+                
                 # Sync all secrets to GCP
                 if not sync_all_secrets_to_gcp(gcp_client, project_id, secrets):
                     all_success = False
+                    
+        except Exception as e:
+            logger.error(f"Failed to authenticate with GCP: {e}")
+            all_success = False
     
     # Final status
     logger.info("\n" + "="*60)
