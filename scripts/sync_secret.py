@@ -353,57 +353,75 @@ def main():
         logger.info("="*60)
         
         # Get GCP configuration
-        gcp_secret_key, project_id, client_email = get_gcp_config(workflow_data, secrets)
-        
-        # Use FaaSr_py helper to handle PEM format and get access token
         try:
-            from FaaSr_py.helpers.gcp_auth import refresh_gcp_access_token
-            
-            # Find the GCP server name from workflow
-            gcp_server_name = None
-            for server_name, server_config in workflow_data.get("ComputeServers", {}).items():
-                if server_config.get("FaaSType", "").lower() == "googlecloud":
-                    gcp_server_name = server_name
-                    break
-            
-            if not gcp_server_name:
-                logger.error("No GoogleCloud server found in ComputeServers")
-                all_success = False
-            else:
-                # Build temp payload for FaaSr authentication
-                gcp_server_config = workflow_data["ComputeServers"][gcp_server_name].copy()
-                gcp_server_config["SecretKey"] = gcp_secret_key
-                
-                # Ensure Region is set (default to us-central1 if not specified)
-                if "Region" not in gcp_server_config:
-                    gcp_server_config["Region"] = "us-central1"
-                    logger.warning("GCP Region not specified in workflow, defaulting to us-central1")
-                
-                temp_payload = {"ComputeServers": {gcp_server_name: gcp_server_config}}
-                
-                # Get access token using FaaSr helper (handles PEM format)
-                access_token = refresh_gcp_access_token(temp_payload, gcp_server_name)
-                logger.info("Successfully authenticated with GCP using access token")
-                
-                # Create credentials from access token
-                from google.auth.transport import requests as google_requests
-                from google.oauth2 import credentials as oauth2_credentials
-                
-                credentials = oauth2_credentials.Credentials(token=access_token)
-                
-                # Initialize GCP Secret Manager client with access token
-                gcp_client = secretmanager.SecretManagerServiceClient(credentials=credentials)
-                logger.info("Successfully initialized GCP Secret Manager client")
-                
-                # Sync all secrets to GCP
-                if not sync_all_secrets_to_gcp(gcp_client, project_id, secrets):
-                    all_success = False
-                    
+            gcp_secret_key, project_id, client_email = get_gcp_config(workflow_data, secrets)
+            logger.info(f"Retrieved GCP secret key (length: {len(gcp_secret_key)})")
         except Exception as e:
             import traceback
-            logger.error(f"Failed to authenticate with GCP: {e}")
+            logger.error(f"Failed to get GCP config: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             all_success = False
+            gcp_secret_key = None
+        
+        # Use FaaSr_py helper to handle PEM format and get access token
+        if gcp_secret_key:
+            try:
+                logger.info("Importing FaaSr_py helper...")
+                from FaaSr_py.helpers.gcp_auth import refresh_gcp_access_token
+                logger.info("Successfully imported FaaSr_py helper")
+                
+                # Find the GCP server name from workflow
+                gcp_server_name = None
+                for server_name, server_config in workflow_data.get("ComputeServers", {}).items():
+                    if server_config.get("FaaSType", "").lower() == "googlecloud":
+                        gcp_server_name = server_name
+                        break
+                
+                logger.info(f"Found GCP server: {gcp_server_name}")
+                
+                if not gcp_server_name:
+                    logger.error("No GoogleCloud server found in ComputeServers")
+                    all_success = False
+                else:
+                    # Build temp payload for FaaSr authentication
+                    logger.info("Building temp payload for authentication...")
+                    gcp_server_config = workflow_data["ComputeServers"][gcp_server_name].copy()
+                    gcp_server_config["SecretKey"] = gcp_secret_key
+                    
+                    # Ensure Region is set (default to us-central1 if not specified)
+                    if "Region" not in gcp_server_config:
+                        gcp_server_config["Region"] = "us-central1"
+                        logger.warning("GCP Region not specified in workflow, defaulting to us-central1")
+                    
+                    temp_payload = {"ComputeServers": {gcp_server_name: gcp_server_config}}
+                    
+                    # Get access token using FaaSr helper (handles PEM format)
+                    logger.info("Calling refresh_gcp_access_token...")
+                    access_token = refresh_gcp_access_token(temp_payload, gcp_server_name)
+                    logger.info("Successfully authenticated with GCP using access token")
+                    
+                    # Create credentials from access token
+                    logger.info("Creating credentials from access token...")
+                    from google.auth.transport import requests as google_requests
+                    from google.oauth2 import credentials as oauth2_credentials
+                    
+                    credentials = oauth2_credentials.Credentials(token=access_token)
+                    
+                    # Initialize GCP Secret Manager client with access token
+                    logger.info("Initializing GCP Secret Manager client...")
+                    gcp_client = secretmanager.SecretManagerServiceClient(credentials=credentials)
+                    logger.info("Successfully initialized GCP Secret Manager client")
+                    
+                    # Sync all secrets to GCP
+                    logger.info("Starting secret sync to GCP...")
+                    if not sync_all_secrets_to_gcp(gcp_client, project_id, secrets):
+                        all_success = False
+                        
+            except Exception as e:
+                import traceback
+                logger.error(f"Failed during GCP sync: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                all_success = False
     
     # Final status
     logger.info("\n" + "="*60)
