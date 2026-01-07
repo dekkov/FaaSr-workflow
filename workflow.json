@@ -1,0 +1,115 @@
+{
+    "ComputeServers": {
+        "My_GitHub_Account": {
+            "FaaSType": "GitHubActions",
+            "UserName": "Ashish-Ramrakhiani",
+            "UseSecretStore": false,
+            "ActionRepoName": "FaaSr-py-test-rpc",
+            "Branch": "main",
+            "Token": "My_GitHub_Account_TOKEN"
+        },
+        "GCP": {
+            "FaaSType": "GoogleCloud",
+            "Namespace": "faasr-471105",
+            "Endpoint": "https://run.googleapis.com/v2/projects/",
+            "UseSecretStore": true,
+            "ClientEmail": "faasr-hoang@faasr-471105.iam.gserviceaccount.com",
+            "TokenUri": "https://oauth2.googleapis.com/token"
+        },
+        "AWS": {
+            "FaaSType": "AWS",
+            "Region": "us-west-2",
+            "UseSecretStore": true,
+            "AccessKey": "AWS_ACCESS_KEY",
+            "SecretKey": "AWS_SECRET_KEY"
+        }
+    },
+    "DataStores": {
+        "MINIO": {
+            "Bucket": "hoang",
+            "Region": "us-east-1",
+            "AccessKey": "MINIO_ACCESS_KEY",
+            "SecretKey": "MINIO_SECRET_KEY"
+        }
+    },
+    "ActionList": {
+        "add-operation": {
+            "FunctionName": "add_rpc",
+            "FaaSServer": "My_GitHub_Account",
+            "Type": "Python",
+            "Arguments": {
+                "folder": "testadd",
+                "num1": 400,
+                "num2": 100,
+                "output": "add_result_500.txt"
+            },
+            "InvokeNext": [
+                "rfunc(1)"
+            ]
+        },
+        "rfunc": {
+            "FunctionName": "r_log",
+            "FaaSServer": "GCP",
+            "Type": "R",
+            "Arguments": {
+                "message": "testing testing testing"
+            },
+            "InvokeNext": [
+                "delete"
+            ]
+        },
+        "delete": {
+            "FunctionName": "print_and_delete",
+            "FaaSServer": "My_GitHub_Account",
+            "Type": "Python",
+            "Arguments": {
+                "folder": "testadd",
+                "filename": "add_result_500.txt"
+            },
+            "InvokeNext": [
+                {"True": ["folders(10)"]}
+            ]
+        },
+        "folders": {
+            "FunctionName": "test_list_folders",
+            "FaaSServer": "My_GitHub_Account",
+            "Type": "Python",
+            "Arguments": {},
+            "InvokeNext": []
+        }
+    },
+    "ActionContainers": {
+        "rfunc": "ramrakha/gcp-r:1.4",
+        "add_operation": "ghcr.io/ashish-ramrakhiani/ga-rpc-python:dev",
+        "log": "ghcr.io/ashish-ramrakhiani/ga-rpc-python:dev",
+        "folders": "ghcr.io/ashish-ramrakhiani/ga-rpc-python:dev"
+    },
+    "FunctionCRANPackage": {
+        "r_log": [
+            "gapminder"
+        ]
+    },
+    "PyPIPackageDownloads": {
+        "add_rpc": [
+            "random2"
+        ]
+    },
+    "FunctionGitHubPackage": {
+        "add_rpc": [
+            "oittaa/uuid6-python"
+        ]
+    },
+    "FunctionGitRepo": {
+        "add_rpc": "nolcut/test-py",
+        "r_log": "nolcut/test-py",
+        "print_and_delete": "nolcut/test-py",
+        "test_list_folders": "nolcut/test-py"
+    },
+    "FunctionInvoke": "add-operation",
+    "FaaSrLog": "FaaSrLog",
+    "LoggingDataStore": "My_S3_Bucket",
+    "DefaultDataStore": "My_S3_Bucket",
+    "InvocationID":"1234",
+    "InvocationIDFromDate": "%Y%m%d%H%M",
+    "WorkflowName": "test-ts-workflow-7"
+}
