@@ -18,7 +18,7 @@
         },
         "AWS": {
             "FaaSType": "AWS",
-            "Region": "us-west-2",
+            "Region": "us-east-1",
             "UseSecretStore": true,
             "AccessKey": "AWS_ACCESS_KEY",
             "SecretKey": "AWS_SECRET_KEY"
