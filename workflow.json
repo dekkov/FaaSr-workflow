@@ -1,6 +1,6 @@
 {
     "ComputeServers": {
-        "My_GitHub_Account": {
+        "Github": {
             "FaaSType": "GitHubActions",
             "UserName": "Ashish-Ramrakhiani",
             "UseSecretStore": false,
@@ -30,6 +30,12 @@
             "Region": "us-east-1",
             "AccessKey": "MINIO_ACCESS_KEY",
             "SecretKey": "MINIO_SECRET_KEY"
+        },
+        "My_S3_Bucket": {
+            "Bucket": "my-s3-bucket",
+            "Region": "us-east-1",
+            "AccessKey": "MY_S3_ACCESS_KEY",
+            "SecretKey": "MY_S3_SECRET_KEY"
         }
     },
     "ActionList": {
