@@ -5,8 +5,7 @@
             "UserName": "Ashish-Ramrakhiani",
             "UseSecretStore": false,
             "ActionRepoName": "FaaSr-py-test-rpc",
-            "Branch": "main",
-            "Token": "My_GitHub_Account_TOKEN"
+            "Branch": "main"
         },
         "GCP": {
             "FaaSType": "GoogleCloud",
@@ -19,23 +18,17 @@
         "AWS": {
             "FaaSType": "AWS",
             "Region": "us-east-1",
-            "UseSecretStore": true,
-            "AccessKey": "AWS_ACCESS_KEY",
-            "SecretKey": "AWS_SECRET_KEY"
+            "UseSecretStore": true
         }
     },
     "DataStores": {
         "MINIO": {
             "Bucket": "hoang",
-            "Region": "us-east-1",
-            "AccessKey": "MINIO_ACCESS_KEY",
-            "SecretKey": "MINIO_SECRET_KEY"
+            "Region": "us-east-1"
         },
         "My_S3_Bucket": {
             "Bucket": "my-s3-bucket",
-            "Region": "us-east-1",
-            "AccessKey": "MY_S3_ACCESS_KEY",
-            "SecretKey": "MY_S3_SECRET_KEY"
+            "Region": "us-east-1"
         }
     },
     "ActionList": {
