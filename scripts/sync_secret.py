@@ -57,6 +57,72 @@ def read_github_secrets():
         sys.exit(1)
 
 
+def get_required_secrets(workflow_data):
+    """
+    Determine which secrets are required based on workflow configuration.
+    
+    Returns a set of required secret names based on:
+    - ComputeServers: secrets needed by each FaaSType
+    - DataStores: {NAME}_ACCESSKEY and {NAME}_SECRETKEY for each store
+    """
+    required_secrets = set()
+    
+    # Process ComputeServers - determine secrets based on FaaSType
+    for server_name, server_config in workflow_data.get("ComputeServers", {}).items():
+        faas_type = server_config.get("FaaSType", "").lower()
+        
+        if faas_type == "githubactions":
+            required_secrets.add("GH_PAT")
+        elif faas_type in ["lambda", "aws_lambda", "aws"]:
+            required_secrets.add("AWS_ACCESSKEY")
+            required_secrets.add("AWS_SECRETKEY")
+            required_secrets.add("AWS_ARN")
+        elif faas_type == "googlecloud":
+            required_secrets.add("GCP_SECRETKEY")
+            # GoogleCloud also needs GH_PAT for GitHub Action invocation
+            required_secrets.add("GH_PAT")
+        elif faas_type == "openwhisk":
+            required_secrets.add("OW_APIKEY")
+        elif faas_type == "slurm":
+            required_secrets.add("SLURM_TOKEN")
+    
+    # Process DataStores - each store needs {NAME}_ACCESSKEY and {NAME}_SECRETKEY
+    for store_name in workflow_data.get("DataStores", {}).keys():
+        required_secrets.add(f"{store_name}_ACCESSKEY")
+        required_secrets.add(f"{store_name}_SECRETKEY")
+    
+    return required_secrets
+
+
+def filter_secrets(all_secrets, required_secrets):
+    """
+    Filter secrets to only include those that are required.
+    
+    Performs case-insensitive matching between available secrets and required secrets.
+    """
+    # Create a case-insensitive lookup map: lowercase -> original key
+    secrets_lower_map = {k.upper(): k for k in all_secrets.keys()}
+    
+    filtered = {}
+    matched_required = set()
+    
+    for required in required_secrets:
+        required_upper = required.upper()
+        if required_upper in secrets_lower_map:
+            original_key = secrets_lower_map[required_upper]
+            filtered[original_key] = all_secrets[original_key]
+            matched_required.add(required)
+    
+    # Log which required secrets were found and which were missing
+    missing = required_secrets - matched_required
+    if missing:
+        logger.warning(f"Required secrets not found in environment: {missing}")
+    
+    logger.info(f"Filtered to {len(filtered)} required secrets out of {len(all_secrets)} total")
+    
+    return filtered
+
+
 def get_aws_config(workflow_data, secrets):
     """Extract AWS credentials and region from secrets and workflow"""
     aws_access_key = secrets.get("AWS_ACCESSKEY", "")
@@ -207,7 +273,18 @@ def main():
     workflow_data = read_workflow_file(args.workflow_file)
     logger.info(f"Successfully loaded workflow file: {args.workflow_file}")
     
-    secrets = read_github_secrets()
+    all_secrets = read_github_secrets()
+    
+    # Determine which secrets are required based on workflow configuration
+    required_secrets = get_required_secrets(workflow_data)
+    logger.info(f"Required secrets based on workflow: {sorted(required_secrets)}")
+    
+    # Filter to only sync required secrets
+    secrets = filter_secrets(all_secrets, required_secrets)
+    
+    if not secrets:
+        logger.error("No required secrets found in environment")
+        sys.exit(1)
     
     sync_to_aws = os.getenv("SYNC_TO_AWS", "false").lower() == "true"
     sync_to_gcp = os.getenv("SYNC_TO_GCP", "false").lower() == "true"
