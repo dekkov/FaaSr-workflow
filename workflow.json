@@ -17,7 +17,7 @@
         },
         "AWS": {
             "FaaSType": "AWS",
-            "Region": "us-east-1",
+            "Region": "us-west-1",
             "UseSecretStore": true
         }
     },
