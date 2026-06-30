@@ -68,6 +68,9 @@ def get_required_secrets(workflow_data):
     """
     required_secrets = set()
     
+    # GH_PAT should always be included to avoid ratelimits
+    required_secrets.add("GH_PAT")
+
     # Process ComputeServers - determine secrets based on FaaSType
     for server_name, server_config in workflow_data.get("ComputeServers", {}).items():
         faas_type = server_config.get("FaaSType", "").lower()
