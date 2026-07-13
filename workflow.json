@@ -56,18 +56,16 @@
       }
     },
     "DataStores": {
-      "S3": {
+      "MINIO": {
         "Endpoint": "https://play.min.io",
         "Bucket": "openmeteo",
         "Region": "us-east-1",
-        "AccessKey": "S3_AccessKey",
-        "SecretKey": "S3_SecretKey",
         "Writable": "TRUE"
       }
     },
     "FunctionGitRepo": {
-      "get-weather-forecast-corvalis": "dekkov/openmeteo_faasr/main/functions/get_weather_forecast.py",
-      "get-weather-forecast-new-york": "dekkov/openmeteo_faasr/main/functions/get_weather_forecast.py",
-      "combine-weather-forecasts": "dekkov/openmeteo_faasr/main/functions/combine_weather_forecasts.py"
+      "get-weather-forecast-corvalis": "dekkov/openmeteo_faasr/main/get_weather_forecast.py",
+      "get-weather-forecast-new-york": "dekkov/openmeteo_faasr/mains/get_weather_forecast.py",
+      "combine-weather-forecasts": "dekkov/openmeteo_faasr/main/combine_weather_forecasts.py"
     }
   }
