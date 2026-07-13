@@ -12,7 +12,7 @@
         "FunctionName": "get_weather_forecast",
         "Arguments": {
           "folder": "openmeteo_faasr",
-          "location": "Corvallis, OR",
+          "location": "Corvallis",
           "output_file": "forecast_loc_corvallis.csv"
         },
         "InvokeNext": ["get-weather-forecast-new-york"]
@@ -23,7 +23,7 @@
         "FunctionName": "get_weather_forecast",
         "Arguments": {
           "folder": "openmeteo_faasr",
-          "location": "New York, NY",
+          "location": "New York",
           "output_file": "forecast_loc_new_york.csv"
         },
         "InvokeNext": ["combine-weather-forecasts"]
