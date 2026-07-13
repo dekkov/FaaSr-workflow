@@ -25,7 +25,7 @@ jobs:
         steps:
           - name: Install patched FaaSr backend
             run: |
-                python3 -m pip install --upgrade --force-reinstall --break-system-packages "git+https://github.com/dekkov/FaaSr-Backend.git"
+                python3 -m pip install --upgrade --force-reinstall --no-deps --break-system-packages "git+https://github.com/dekkov/FaaSr-Backend.git"
           - name: Run Python entrypoint
             run: |
                 cd /action
