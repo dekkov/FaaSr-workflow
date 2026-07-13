@@ -17,8 +17,8 @@ jobs:
 
         env:
             GH_PAT: ${{ secrets.GH_PAT}}
-            S3_AccessKey: ${{ secrets.S3_AccessKey}}
-            S3_SecretKey: ${{ secrets.S3_SecretKey}}
+            MINIO_AccessKey: ${{ secrets.MINIO_AccessKey}}
+            MINIO_SecretKey: ${{ secrets.MINIO_SecretKey}}
             OVERWRITTEN: ${{ github.event.inputs.OVERWRITTEN }}
             PAYLOAD_URL: ${{ github.event.inputs.PAYLOAD_URL }}
 
