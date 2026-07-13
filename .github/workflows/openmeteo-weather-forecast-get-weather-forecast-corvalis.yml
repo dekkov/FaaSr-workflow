@@ -23,6 +23,9 @@ jobs:
             PAYLOAD_URL: ${{ github.event.inputs.PAYLOAD_URL }}
 
         steps:
+          - name: Install patched FaaSr backend
+            run: |
+                python3 -m pip install --upgrade --force-reinstall "git+https://github.com/dekkov/FaaSr-Backend.git"
           - name: Run Python entrypoint
             run: |
                 cd /action
