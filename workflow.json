@@ -1,0 +1,73 @@
+{
+    "FunctionInvoke": "get-weather-forecast-corvalis",
+    "WorkflowName": "openmeteo-weather-forecast",
+    "DefaultDataStore": "S3",
+    "LoggingDataStore": "S3",
+    "FaaSrLog": "FaaSrLog",
+    "InvocationIDFromDate": "%Y-%m-%d-%H-%M-%S",
+    "ActionList": {
+      "get-weather-forecast-corvalis": {
+        "FaaSServer": "GH",
+        "Type": "Python",
+        "FunctionName": "get_weather_forecast",
+        "Arguments": {
+          "folder": "openmeteo_faasr",
+          "location": "Corvallis, OR",
+          "output_file": "forecast_loc_corvalis.csv"
+        },
+        "InvokeNext": ["get-weather-forecast-new-york"]
+      },
+      "get-weather-forecast-new-york": {
+        "FaaSServer": "GH",
+        "Type": "Python",
+        "FunctionName": "get_weather_forecast",
+        "Arguments": {
+          "folder": "openmeteo_faasr",
+          "location": "New York, NY",
+          "output_file": "forecast_loc_new_york.csv"
+        },
+        "InvokeNext": ["combine-weather-forecasts"]
+      },
+      "combine-weather-forecasts": {
+        "FaaSServer": "GH",
+        "Type": "Python",
+        "FunctionName": "combine_weather_forecasts",
+        "Arguments": {
+          "folder": "openmeteo_faasr",
+          "input_loc1": "forecast_loc_corvallis.csv",
+          "input_loc2": "forecast_loc_new_york.csv",
+          "output_file": "combined_forecasts.csv"
+        },
+        "InvokeNext": []
+      }
+    },
+    "ActionContainers": {
+      "get-weather-forecast-corvalis": "ghcr.io/faasr/github-actions-r:latest",
+      "get-weather-forecast-new-york": "ghcr.io/faasr/github-actions-r:latest",
+      "combine-weather-forecasts": "ghcr.io/faasr/github-actions-r:latest"
+    },
+    "ComputeServers": {
+      "GH": {
+        "FaaSType": "GitHubActions",
+        "UserName": "dekkov",
+        "ActionRepoName": "openmeteo_faasr",
+        "Branch": "main",
+        "UseSecretStore": true
+      }
+    },
+    "DataStores": {
+      "S3": {
+        "Endpoint": "https://play.min.io",
+        "Bucket": "openmeteo",
+        "Region": "us-east-1",
+        "AccessKey": "S3_AccessKey",
+        "SecretKey": "S3_SecretKey",
+        "Writable": "TRUE"
+      }
+    },
+    "FunctionGitRepo": {
+      "get-weather-forecast-corvalis": "dekkov/openmeteo_faasr/main/functions/get_weather_forecast.py",
+      "get-weather-forecast-new-york": "dekkov/openmeteo_faasr/main/functions/get_weather_forecast.py",
+      "combine-weather-forecasts": "dekkov/openmeteo_faasr/main/functions/combine_weather_forecasts.py"
+    }
+  }
