@@ -68,7 +68,10 @@
       "combine_forecasts": "dekkov/openmeteo_faasr"
     },
     "FunctionCRANPackage": {
-      "get_weather_forecast": ["openmeteo", "tidyverse"],
+      "get_weather_forecast": ["tidyverse"],
       "combine_forecasts": ["tidyverse"]
+    },
+    "FunctionGitHubPackage": {
+      "get_weather_forecast": ["tpisel/openmeteo"]
     }
-  }
+}
