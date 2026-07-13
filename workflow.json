@@ -64,8 +64,7 @@
       }
     },
     "FunctionGitRepo": {
-      "get-weather-forecast-corvalis": "dekkov/openmeteo_faasr/main/get_weather_forecast.R",
-      "get-weather-forecast-new-york": "dekkov/openmeteo_faasr/main/get_weather_forecast.R",
-      "combine-weather-forecasts": "dekkov/openmeteo_faasr/main/combine_forecasts.R"
+      "get_weather_forecast": "dekkov/openmeteo_faasr",
+      "combine_forecasts": "dekkov/openmeteo_faasr"
     }
   }
