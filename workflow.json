@@ -1,25 +1,25 @@
 {
     "FunctionInvoke": "get-weather-forecast-corvalis",
     "WorkflowName": "openmeteo-weather-forecast",
-    "DefaultDataStore": "S3",
-    "LoggingDataStore": "S3",
+    "DefaultDataStore": "MINIO",
+    "LoggingDataStore": "MINIO",
     "FaaSrLog": "FaaSrLog",
     "InvocationIDFromDate": "%Y-%m-%d-%H-%M-%S",
     "ActionList": {
       "get-weather-forecast-corvalis": {
         "FaaSServer": "GH",
-        "Type": "Python",
+        "Type": "R",
         "FunctionName": "get_weather_forecast",
         "Arguments": {
           "folder": "openmeteo_faasr",
           "location": "Corvallis, OR",
-          "output_file": "forecast_loc_corvalis.csv"
+          "output_file": "forecast_loc_corvallis.csv"
         },
         "InvokeNext": ["get-weather-forecast-new-york"]
       },
       "get-weather-forecast-new-york": {
         "FaaSServer": "GH",
-        "Type": "Python",
+        "Type": "R",
         "FunctionName": "get_weather_forecast",
         "Arguments": {
           "folder": "openmeteo_faasr",
@@ -30,8 +30,8 @@
       },
       "combine-weather-forecasts": {
         "FaaSServer": "GH",
-        "Type": "Python",
-        "FunctionName": "combine_weather_forecasts",
+        "Type": "R",
+        "FunctionName": "combine_forecasts",
         "Arguments": {
           "folder": "openmeteo_faasr",
           "input_loc1": "forecast_loc_corvallis.csv",
@@ -50,7 +50,7 @@
       "GH": {
         "FaaSType": "GitHubActions",
         "UserName": "dekkov",
-        "ActionRepoName": "openmeteo_faasr",
+        "ActionRepoName": "FaaSr-workflow",
         "Branch": "main",
         "UseSecretStore": true
       }
@@ -64,8 +64,8 @@
       }
     },
     "FunctionGitRepo": {
-      "get-weather-forecast-corvalis": "dekkov/openmeteo_faasr/main/get_weather_forecast.py",
-      "get-weather-forecast-new-york": "dekkov/openmeteo_faasr/mains/get_weather_forecast.py",
-      "combine-weather-forecasts": "dekkov/openmeteo_faasr/main/combine_weather_forecasts.py"
+      "get-weather-forecast-corvalis": "dekkov/openmeteo_faasr/main/get_weather_forecast.R",
+      "get-weather-forecast-new-york": "dekkov/openmeteo_faasr/main/get_weather_forecast.R",
+      "combine-weather-forecasts": "dekkov/openmeteo_faasr/main/combine_forecasts.R"
     }
   }
