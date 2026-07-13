@@ -66,5 +66,9 @@
     "FunctionGitRepo": {
       "get_weather_forecast": "dekkov/openmeteo_faasr",
       "combine_forecasts": "dekkov/openmeteo_faasr"
+    },
+    "FunctionCRANPackage": {
+      "get_weather_forecast": ["openmeteo", "tidyverse"],
+      "combine_forecasts": ["tidyverse"]
     }
   }
