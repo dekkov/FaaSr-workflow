@@ -180,6 +180,7 @@ def _generate_timer_wrapper_yaml(workflow_name, cron, workflow_file):
         f"        run: |\n"
         f"          python -m pip install --upgrade pip\n"
         f"          pip install boto3 requests jsonschema cryptography FaaSr_py\n"
+        f'          python3 -m pip install --upgrade --force-reinstall --no-deps --break-system-packages "git+https://github.com/dekkov/FaaSr-Backend.git"\n'
         f"\n"
         f"      - name: Install OpenWhisk CLI\n"
         f"        run: |\n"

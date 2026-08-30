@@ -25,6 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install boto3 requests jsonschema cryptography
           pip install FaaSr_py
+          python3 -m pip install --upgrade --force-reinstall --no-deps --break-system-packages "git+https://github.com/dekkov/FaaSr-Backend.git"
 
       - name: Install OpenWhisk CLI
         run: |
@@ -49,7 +50,7 @@ jobs:
           OW_APIkey: ${{ secrets.OW_APIkey }}
           AWS_AccessKey: ${{ secrets.AWS_AccessKey }}
           AWS_SecretKey: ${{ secrets.AWS_SecretKey }}
-          GCP_SecretKey: ${{ secrets.GCP_SecretKey }}	
+          GCP_SecretKey: ${{ secrets.GCP_SecretKey }}
           SLURM_Token: ${{ secrets.SLURM_Token }}
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |

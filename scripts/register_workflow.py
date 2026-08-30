@@ -154,11 +154,6 @@ def generate_user_defined_secret_imports(faasr_payload):
 
 def generate_serverless_yaml(action_name, container_image, secret_imports):
     """Generate YAML for serverless (GitHub-hosted runner)"""
-    # Override baked-in FaaSr_py with fork that has the R GitHub-package install fix.
-    backend_pip = os.getenv(
-        "FAASR_BACKEND_PIP",
-        "git+https://github.com/dekkov/FaaSr-Backend.git",
-    )
     return textwrap.dedent(
         f"""\
         name: {action_name}
@@ -186,7 +181,7 @@ def generate_serverless_yaml(action_name, container_image, secret_imports):
                 steps:
                   - name: Install patched FaaSr backend
                     run: |
-                        python3 -m pip install --upgrade --force-reinstall --no-deps --break-system-packages "{backend_pip}"
+                        python3 -m pip install --upgrade --force-reinstall --no-deps --break-system-packages "git+https://github.com/dekkov/FaaSr-Backend.git"
                   - name: Run Python entrypoint
                     run: |
                         cd /action
@@ -197,10 +192,6 @@ def generate_serverless_yaml(action_name, container_image, secret_imports):
 
 def generate_vm_yaml(action_name, container_image, secret_imports):
     """Generate YAML for VM (self-hosted runner)"""
-    backend_pip = os.getenv(
-        "FAASR_BACKEND_PIP",
-        "git+https://github.com/dekkov/FaaSr-Backend.git",
-    )
     return textwrap.dedent(
         f"""\
         name: {action_name}
@@ -228,7 +219,7 @@ def generate_vm_yaml(action_name, container_image, secret_imports):
                 steps:
                   - name: Install patched FaaSr backend
                     run: |
-                        python3 -m pip install --upgrade --force-reinstall --no-deps --break-system-packages "{backend_pip}"
+                        python3 -m pip install --upgrade --force-reinstall --no-deps --break-system-packages "git+https://github.com/dekkov/FaaSr-Backend.git"
                   - name: Run Python entrypoint
                     run: |
                         cd /action
