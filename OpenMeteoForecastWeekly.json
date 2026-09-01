@@ -1,0 +1,121 @@
+{
+  "FunctionInvoke": "Start",
+  "WorkflowName": "OpenMeteoForecastWeekly",
+  "DefaultDataStore": "S3",
+  "LoggingDataStore": "S3",
+  "FaaSrLog": "FaaSrLog",
+  "ActionList": {
+    "Start": {
+      "FaaSServer": "GH",
+      "Type": "R",
+      "FunctionName": "start_forecast",
+      "Arguments": {},
+      "InvokeNext": [
+        "GetCorvallis",
+        "GetNewYork",
+        "GetTokyo"
+      ]
+    },
+    "GetCorvallis": {
+      "FaaSServer": "GH",
+      "Type": "R",
+      "FunctionName": "get_weather_forecast",
+      "Arguments": {
+        "folder": "OpenMeteoForecast",
+        "location": "Corvallis",
+        "output_file": "forecast_corvallis.csv",
+        "use_archive": "TRUE"
+      },
+      "InvokeNext": ["CombineForecasts"]
+    },
+    "GetNewYork": {
+      "FaaSServer": "GH",
+      "Type": "R",
+      "FunctionName": "get_weather_forecast",
+      "Arguments": {
+        "folder": "OpenMeteoForecast",
+        "location": "New York",
+        "output_file": "forecast_new_york.csv",
+        "use_archive": "TRUE"
+      },
+      "InvokeNext": ["CombineForecasts"]
+    },
+    "GetTokyo": {
+      "FaaSServer": "GH",
+      "Type": "R",
+      "FunctionName": "get_weather_forecast",
+      "Arguments": {
+        "folder": "OpenMeteoForecast",
+        "location": "Tokyo",
+        "output_file": "forecast_tokyo.csv",
+        "use_archive": "TRUE"
+      },
+      "InvokeNext": ["CombineForecasts"]
+    },
+    "CombineForecasts": {
+      "FaaSServer": "GH",
+      "Type": "R",
+      "FunctionName": "combine_forecasts",
+      "Arguments": {
+        "folder": "OpenMeteoForecast",
+        "input_loc1": "forecast_corvallis.csv",
+        "input_loc2": "forecast_new_york.csv",
+        "input_loc3": "forecast_tokyo.csv",
+        "output_file": "combined_forecasts.csv",
+        "use_archive": "TRUE"
+      },
+      "InvokeNext": ["PlotForecasts"]
+    },
+    "PlotForecasts": {
+      "FaaSServer": "GH",
+      "Type": "R",
+      "FunctionName": "plot_forecasts",
+      "Arguments": {
+        "folder": "OpenMeteoForecast",
+        "input_file": "combined_forecasts.csv",
+        "output_file": "forecast_comparison.png",
+        "use_archive": "TRUE"
+      },
+      "InvokeNext": []
+    }
+  },
+  "ActionContainers": {
+    "Start": "ghcr.io/faasr/github-actions-r:latest",
+    "GetCorvallis": "ghcr.io/faasr/github-actions-r:latest",
+    "GetNewYork": "ghcr.io/faasr/github-actions-r:latest",
+    "GetTokyo": "ghcr.io/faasr/github-actions-r:latest",
+    "CombineForecasts": "ghcr.io/faasr/github-actions-r:latest",
+    "PlotForecasts": "ghcr.io/faasr/github-actions-r:latest"
+  },
+  "ComputeServers": {
+    "GH": {
+      "FaaSType": "GitHubActions",
+      "UserName": "YOUR_USERNAME",
+      "ActionRepoName": "FaaSr-workflow",
+      "Branch": "main",
+      "UseSecretStore": true
+    }
+  },
+  "DataStores": {
+    "S3": {
+      "Endpoint": "https://play.min.io",
+      "Bucket": "faasr",
+      "Region": "us-east-1",
+      "Writable": "TRUE"
+    }
+  },
+  "FunctionGitRepo": {
+    "start_forecast": "dekkov/openmeteo_faasr/R",
+    "get_weather_forecast": "dekkov/openmeteo_faasr/R",
+    "combine_forecasts": "dekkov/openmeteo_faasr/R",
+    "plot_forecasts": "dekkov/openmeteo_faasr/R"
+  },
+  "FunctionCRANPackage": {
+    "get_weather_forecast": ["tidyverse"],
+    "combine_forecasts": ["tidyverse"],
+    "plot_forecasts": ["tidyverse"]
+  },
+  "FunctionGitHubPackage": {
+    "get_weather_forecast": ["tpisel/openmeteo"]
+  }
+}
