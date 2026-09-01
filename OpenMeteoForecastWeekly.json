@@ -1,8 +1,8 @@
 {
   "FunctionInvoke": "Start",
   "WorkflowName": "OpenMeteoForecastWeekly",
-  "DefaultDataStore": "S3",
-  "LoggingDataStore": "S3",
+  "DefaultDataStore": "MINIO",
+  "LoggingDataStore": "MINIO",
   "FaaSrLog": "FaaSrLog",
   "ActionList": {
     "Start": {
@@ -97,9 +97,9 @@
     }
   },
   "DataStores": {
-    "S3": {
+    "MINIO": {
       "Endpoint": "https://play.min.io",
-      "Bucket": "faasr",
+      "Bucket": "openmeteo",
       "Region": "us-east-1",
       "Writable": "TRUE"
     }
