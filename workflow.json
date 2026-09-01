@@ -26,6 +26,17 @@
           "location": "New York",
           "output_file": "forecast_loc_new_york.csv"
         },
+        "InvokeNext": ["get-weather-forecast-tokyo"]
+      },
+      "get-weather-forecast-tokyo": {
+        "FaaSServer": "GH",
+        "Type": "R",
+        "FunctionName": "get_weather_forecast",
+        "Arguments": {
+          "folder": "openmeteo_faasr",
+          "location": "Tokyo",
+          "output_file": "forecast_loc_tokyo.csv"
+        },
         "InvokeNext": ["combine-weather-forecasts"]
       },
       "combine-weather-forecasts": {
@@ -36,6 +47,7 @@
           "folder": "openmeteo_faasr",
           "input_loc1": "forecast_loc_corvallis.csv",
           "input_loc2": "forecast_loc_new_york.csv",
+          "input_loc3": "forecast_loc_tokyo.csv",
           "output_file": "combined_forecasts.csv"
         },
         "InvokeNext": []
@@ -44,6 +56,7 @@
     "ActionContainers": {
       "get-weather-forecast-corvalis": "ghcr.io/faasr/github-actions-r:latest",
       "get-weather-forecast-new-york": "ghcr.io/faasr/github-actions-r:latest",
+      "get-weather-forecast-tokyo": "ghcr.io/faasr/github-actions-r:latest",
       "combine-weather-forecasts": "ghcr.io/faasr/github-actions-r:latest"
     },
     "ComputeServers": {
