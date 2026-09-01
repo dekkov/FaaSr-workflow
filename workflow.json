@@ -11,7 +11,7 @@
         "Type": "R",
         "FunctionName": "get_weather_forecast",
         "Arguments": {
-          "folder": "openmeteo-faasr",
+          "folder": "openmeteo_faasr",
           "location": "Corvallis",
           "output_file": "forecast_loc_corvallis.csv"
         },
@@ -22,7 +22,7 @@
         "Type": "R",
         "FunctionName": "get_weather_forecast",
         "Arguments": {
-          "folder": "openmeteo-faasr",
+          "folder": "openmeteo_faasr",
           "location": "New York",
           "output_file": "forecast_loc_new_york.csv"
         },
@@ -33,7 +33,7 @@
         "Type": "R",
         "FunctionName": "combine_forecasts",
         "Arguments": {
-          "folder": "openmeteo-faasr",
+          "folder": "openmeteo_faasr",
           "input_loc1": "forecast_loc_corvallis.csv",
           "input_loc2": "forecast_loc_new_york.csv",
           "output_file": "combined_forecasts.csv"
